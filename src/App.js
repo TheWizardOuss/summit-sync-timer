@@ -140,6 +140,7 @@ export default function App() {
     [baseGroups, state.currentPhase]
   );
 
+  const isHost = role === "host";
   const canPrev = state.currentPhase > 0;
   const canNext = state.currentPhase < state.phases.length - 1;
 
@@ -172,6 +173,9 @@ export default function App() {
 
   const phase = state.phases[state.currentPhase];
   const phaseLabel = `Phase ${state.currentPhase + 1}`;
+  const headerSubtitle = isHost
+    ? "Coordinate the summit rotation and manage the countdown."
+    : "Stay aligned with your program rotation and the time remaining.";
   const progressPct = useMemo(() => {
     const durationMs = (phase.minutes || 0) * 60 * 1000;
     const elapsed = Math.max(0, durationMs - timeLeftMs);
@@ -184,7 +188,7 @@ export default function App() {
         <div className="app-header">
           <div className="app-header-text">
             <h1 className="app-title">Summit Sync Timer</h1>
-            <p className="app-subtitle">Shared session ID keeps everyone in sync. Host controls the timer and phases.</p>
+            <p className="app-subtitle">{headerSubtitle}</p>
           </div>
           <div className="app-header-controls">
             <select
@@ -218,103 +222,153 @@ export default function App() {
               onBlur={(e) => setSession(e.target.value)}
             />
           </div>
-          <div className="role-helper">
-            Host view is protected. Provide the summit passcode when prompted.
-          </div>
-        </div>
-        <div className="status-bar">
-          <div className="session-pill">
-            <span className="pill-label">Session</span>
-            <span className="pill-value">{state.sessionId}</span>
-          </div>
-          <div className="session-pill">
-            <span className="pill-label">Role</span>
-            <span className="pill-value">{role === "host" ? "Host" : "Viewer"}</span>
-          </div>
-          <div className={`session-pill${state.isRunning ? " is-emphasis" : ""}`}>
-            <span className="pill-label">Timer</span>
-            <span className="pill-value">{state.isRunning ? "Running" : "Paused"}</span>
-          </div>
-          <div className="connection-indicator">
-            <span className={`status-dot ${connected ? "is-online" : "is-offline"}`} />
-            {connected ? "Live Sync" : "Offline"}
-          </div>
-        </div>
-        <div className="layout-grid">
-          <div className="panel timer-panel">
-            <div className="timer-header">
-              <div>
-                <div className="eyebrow">Current Phase</div>
-                <div className="timer-phase-name">{phaseLabel}</div>
+          {isHost ? (
+            !hostUnlocked && (
+              <div className="role-helper">
+                Host view is protected. Provide the summit passcode when prompted.
               </div>
-              <div className="timer-countdown">
-                <div className="timer-countdown-value">{fmt(timeLeftMs)}</div>
-                <div className="timer-countdown-meta">Duration: {phase.minutes} min</div>
+            )
+          ) : (
+            <div className="viewer-helper">
+              This live view updates as soon as the host moves everyone to the next phase.
+            </div>
+          )}
+        </div>
+        {isHost ? (
+          <>
+            <div className="status-bar">
+              <div className="session-pill">
+                <span className="pill-label">Session</span>
+                <span className="pill-value">{state.sessionId}</span>
+              </div>
+              <div className="session-pill">
+                <span className="pill-label">Role</span>
+                <span className="pill-value">Host</span>
+              </div>
+              <div className={`session-pill${state.isRunning ? " is-emphasis" : ""}`}>
+                <span className="pill-label">Timer</span>
+                <span className="pill-value">{state.isRunning ? "Running" : "Paused"}</span>
+              </div>
+              <div className="connection-indicator">
+                <span className={`status-dot ${connected ? "is-online" : "is-offline"}`} />
+                {connected ? "Live Sync" : "Offline"}
               </div>
             </div>
-            <div className="progress-track">
-              <motion.div
-                className="progress-bar"
-                initial={false}
-                animate={{ width: `${progressPct}%` }}
-                transition={{ duration: 0.35, ease: [0.22, 0.61, 0.36, 1] }}
-              />
-            </div>
-            {role === "host" && (
-              <div className="timer-controls">
-                <button className="btn btn-primary" onClick={start}>Start</button>
-                <button className="btn" onClick={pause}>Pause</button>
-                <button className="btn" onClick={reset}>Reset</button>
-                <button className="btn" disabled={!canPrev} onClick={prevPhase}>Prev Phase</button>
-                <button className="btn" disabled={!canNext} onClick={nextPhase}>Next Phase</button>
+            <div className="layout-grid">
+              <div className="panel timer-panel">
+                <div className="timer-header">
+                  <div>
+                    <div className="eyebrow">Current Phase</div>
+                    <div className="timer-phase-name">{phaseLabel}</div>
+                  </div>
+                  <div className="timer-countdown">
+                    <div className="timer-countdown-value">{fmt(timeLeftMs)}</div>
+                    <div className="timer-countdown-meta">Duration: {phase.minutes} min</div>
+                  </div>
+                </div>
+                <div className="progress-track">
+                  <motion.div
+                    className="progress-bar"
+                    initial={false}
+                    animate={{ width: `${progressPct}%` }}
+                    transition={{ duration: 0.35, ease: [0.22, 0.61, 0.36, 1] }}
+                  />
+                </div>
+                {isHost && (
+                  <div className="timer-controls">
+                    <button className="btn btn-primary" onClick={start}>Start</button>
+                    <button className="btn" onClick={pause}>Pause</button>
+                    <button className="btn" onClick={reset}>Reset</button>
+                    <button className="btn" disabled={!canPrev} onClick={prevPhase}>Prev Phase</button>
+                    <button className="btn" disabled={!canNext} onClick={nextPhase}>Next Phase</button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <div className="panel phases-panel">
-            <div className="panel-title">Phases</div>
-            {state.phases.map((p, idx) => (
-              <div key={p.id} className={`phase-card${p.id === state.currentPhase ? " is-active" : ""}`}>
-                <div className="phase-name">Phase {idx + 1}</div>
-                <div className="phase-minute-row">
-                  <span className="label-muted">Minutes:</span>
-                  {role === "host" ? (
-                    <input
-                      type="number"
-                      className="phase-minute-input"
-                      value={p.minutes}
-                      min={1}
-                      max={240}
-                      onChange={(e) => updatePhaseMinutes(p.id, e.target.value)}
-                    />
-                  ) : (
-                    <span>{p.minutes}</span>
-                  )}
+              <div className="panel phases-panel">
+                <div className="panel-title">Phases</div>
+                {state.phases.map((p, idx) => (
+                  <div key={p.id} className={`phase-card${p.id === state.currentPhase ? " is-active" : ""}`}>
+                    <div className="phase-name">Phase {idx + 1}</div>
+                    <div className="phase-minute-row">
+                      <span className="label-muted">Minutes:</span>
+                      {isHost ? (
+                        <input
+                          type="number"
+                          className="phase-minute-input"
+                          value={p.minutes}
+                          min={1}
+                          max={240}
+                          onChange={(e) => updatePhaseMinutes(p.id, e.target.value)}
+                        />
+                      ) : (
+                        <span>{p.minutes}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="panel groups-panel">
+              <div className="groups-header">
+                <div className="panel-title">Program Rotations</div>
+                <p className="panel-help-text">
+                  Participants move to the next program each phase. Advance the phase to rotate everyone together with the timer.
+                </p>
+              </div>
+              <div className="groups-grid">
+                {programAssignments.map((assignment, idx) => (
+                  <div key={idx} className="group-card">
+                    <div className="group-label">{assignment.programName}</div>
+                    <div className="group-phase">Group {assignment.groupIdx + 1}</div>
+                    <ul className="group-list">
+                      {assignment.names.length > 0
+                        ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
+                        : (<li className="group-list-empty">Loading roster…</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="viewer-meta">
+              <div className="viewer-chip">{phaseLabel} of {state.phases.length}</div>
+              <div className="viewer-chip">{phase.minutes} minute phase</div>
+              <div className="viewer-chip">Session {state.sessionId}</div>
+              <div className="connection-indicator">
+                <span className={`status-dot ${connected ? "is-online" : "is-offline"}`} />
+                {connected ? "Live sync" : "Offline"}
+              </div>
+            </div>
+            <div className="viewer-layout">
+              <div className="panel viewer-timer-panel">
+                <div className="viewer-phase-heading">{phaseLabel}</div>
+                <div className="viewer-countdown">{fmt(timeLeftMs)}</div>
+                <div className="viewer-countdown-meta">Everyone rotates when the timer reaches zero.</div>
+              </div>
+              <div className="panel viewer-program-panel">
+                <div className="viewer-program-header">
+                  <h2>Where each group is now</h2>
+                  <p>Find your name under your group to know which program you’re contributing to this phase.</p>
+                </div>
+                <div className="groups-grid viewer-programs-grid">
+                  {programAssignments.map((assignment, idx) => (
+                    <div key={idx} className="group-card viewer-program-card">
+                      <div className="group-label">{assignment.programName}</div>
+                      <div className="group-phase viewer-group-tag">Group {assignment.groupIdx + 1}</div>
+                      <ul className="group-list">
+                        {assignment.names.length > 0
+                          ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
+                          : (<li className="group-list-empty">Loading roster…</li>)}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="panel groups-panel">
-          <div className="groups-header">
-            <div className="panel-title">Program Rotations</div>
-            <p className="panel-help-text">
-              Participants move to the next program each phase. Advance the phase to rotate the rosters together with the timer.
-            </p>
-          </div>
-          <div className="groups-grid">
-            {programAssignments.map((assignment, idx) => (
-              <div key={idx} className="group-card">
-                <div className="group-label">{assignment.programName}</div>
-                <div className="group-phase">Group {assignment.groupIdx + 1}</div>
-                <ul className="group-list">
-                  {assignment.names.length > 0
-                    ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
-                    : (<li className="group-list-empty">Loading roster…</li>)}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
         <div className="app-footer">© 2025 Summit Sync Timer</div>
       </div>
     </div>
