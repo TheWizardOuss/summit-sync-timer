@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 
 // Firebase setup
 import { initializeApp } from "firebase/app";
@@ -105,10 +104,9 @@ const defaultState = {
   groupsCSV: DEFAULT_GROUPS_CSV,
 };
 
-function msLeftForPhase(state) {
+function msLeftForPhase(state, now = Date.now()) {
   const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase] || { minutes: 0 };
   const durationMs = (phase.minutes || 0) * 60 * 1000;
-  const now = Date.now();
   const elapsed = state.isRunning && state.startEpochMs
     ? now - state.startEpochMs + (state.pausedElapsedMs || 0)
     : (state.pausedElapsedMs || 0);
@@ -177,7 +175,7 @@ export default function App() {
 
   const [now, setNow] = useState(Date.now());
   useInterval(() => setNow(Date.now()), 200);
-  const timeLeftMs = useMemo(() => msLeftForPhase(state), [state, now]);
+  const timeLeftMs = useMemo(() => msLeftForPhase(state, now), [state, now]);
   const allGroups = useMemo(() => splitIntoFiveGroups(state.groupsCSV || DEFAULT_GROUPS_CSV), [state.groupsCSV]);
 
   const canPrev = state.currentPhase > 0;
