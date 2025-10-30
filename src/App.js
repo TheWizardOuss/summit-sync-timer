@@ -30,14 +30,7 @@ const PROGRAMS = [
 const PROGRAM_COUNT = PROGRAMS.length;
 const HOST_PASSWORD = "VWDS26";
 
-const DEFAULT_PHASES = PROGRAMS.map((program, idx) => ({
-  id: program.id ?? idx,
-  name: program.name,
-  minutes: 40,
-  owner: program.owner,
-}));
-
-const DEFAULT_GROUPS_CSV = [
+const DEFAULT_GROUP_LIST = [
   [
     "André Martins",
     "Marco Sarroeira",
@@ -47,7 +40,7 @@ const DEFAULT_GROUPS_CSV = [
     "Luís Lima",
     "Ricardo Arruda",
     "Joana Maia",
-  ].join("\n"),
+  ],
   [
     "Bruno Lourenço",
     "Nuno Perpétua",
@@ -57,7 +50,7 @@ const DEFAULT_GROUPS_CSV = [
     "Melissa De Leon",
     "Rodolfo Pereira",
     "Albertina Soares",
-  ].join("\n"),
+  ],
   [
     "Bruno Areal",
     "Stefan Sarroeira",
@@ -67,7 +60,7 @@ const DEFAULT_GROUPS_CSV = [
     "Miguel Fernandes",
     "Sofia Sousa",
     "Joana Martins",
-  ].join("\n"),
+  ],
   [
     "Filipe Esteves",
     "Igor Carvalho",
@@ -77,7 +70,7 @@ const DEFAULT_GROUPS_CSV = [
     "Miguel Sousa",
     "Sukhdeep Sodhi",
     "Patrick Schwerhoff",
-  ].join("\n"),
+  ],
   [
     "Ivo Ferreira",
     "Caio Arruda",
@@ -85,8 +78,18 @@ const DEFAULT_GROUPS_CSV = [
     "João Carradinha",
     "Nadja Pirzadeh",
     "Tiago Bilreiro",
-  ].join("\n"),
-].join("\n\n");
+  ],
+];
+
+const DEFAULT_GROUPS_CSV = DEFAULT_GROUP_LIST.map((group) => group.join("\n")).join("\n\n");
+const DEFAULT_NAME_SET = new Set(DEFAULT_GROUP_LIST.flat());
+
+const DEFAULT_PHASES = PROGRAMS.map((program, idx) => ({
+  id: program.id ?? idx,
+  name: program.name,
+  minutes: 40,
+  owner: program.owner,
+}));
 
 const defaultState = {
   sessionId: "VWDS-2026",
@@ -125,7 +128,7 @@ function useInterval(callback, delay) {
   }, [delay]);
 }
 
-function splitIntoProgramGroups(csv) {
+function parseGroups(csv) {
   const text = (csv || "").trim();
   if (!text) {
     return Array.from({ length: PROGRAM_COUNT }, () => []);
@@ -148,6 +151,31 @@ function splitIntoProgramGroups(csv) {
     groups[idx % PROGRAM_COUNT].push(name);
   });
   return groups;
+}
+
+function splitIntoProgramGroups(csv) {
+  return canonicalizeGroups(parseGroups(csv));
+}
+
+function toCanonicalRoster(csv) {
+  return canonicalizeGroups(parseGroups(csv))
+    .map((group) => group.join("\n"))
+    .join("\n\n");
+}
+
+function canonicalizeGroups(groups) {
+  const flattened = groups.flat().filter(Boolean);
+  const uniqueNames = new Set(flattened);
+  const matchesDefaultRoster =
+    flattened.length === DEFAULT_NAME_SET.size &&
+    uniqueNames.size === DEFAULT_NAME_SET.size &&
+    flattened.every((name) => DEFAULT_NAME_SET.has(name));
+
+  if (matchesDefaultRoster) {
+    return DEFAULT_GROUP_LIST.map((group) => [...group]);
+  }
+
+  return groups.map((group) => [...group]);
 }
 
 function normalizePhases(phases = DEFAULT_PHASES) {
@@ -177,7 +205,7 @@ export default function App() {
     const normalizedState = {
       ...newState,
       phases: normalizePhases(newState.phases),
-      groupsCSV: newState.groupsCSV || DEFAULT_GROUPS_CSV,
+      groupsCSV: toCanonicalRoster(newState.groupsCSV || DEFAULT_GROUPS_CSV),
     };
     const nextState = { ...normalizedState, lastUpdateBy: role };
     setState(nextState);
@@ -196,7 +224,7 @@ export default function App() {
             ...data,
           };
           merged.phases = normalizePhases(data.phases || prev.phases);
-          merged.groupsCSV = (data.groupsCSV ?? prev.groupsCSV ?? DEFAULT_GROUPS_CSV) || DEFAULT_GROUPS_CSV;
+          merged.groupsCSV = toCanonicalRoster((data.groupsCSV ?? prev.groupsCSV ?? DEFAULT_GROUPS_CSV) || DEFAULT_GROUPS_CSV);
           return merged;
         });
       }
