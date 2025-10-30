@@ -38,45 +38,55 @@ const DEFAULT_PHASES = PROGRAMS.map((program, idx) => ({
 }));
 
 const DEFAULT_GROUPS_CSV = [
-  "André Martins",
-  "Bruno Lourenço",
-  "Bruno Areal",
-  "Filipe Esteves",
-  "Ivo Ferreira",
-  "Marco Sarroeira",
-  "Nuno Perpétua",
-  "Stefan Sarroeira",
-  "Igor Carvalho",
-  "Caio Arruda",
-  "Ana Machado",
-  "Andreia Pitti",
-  "Andre Santos",
-  "Puja Naghi",
-  "Fábio Oliveira",
-  "Carlos Fernandes",
-  "Diogo Teixeira",
-  "Daniel Brandão",
-  "Duarte Dias",
-  "João Carradinha",
-  "Gilberto Pe-Curto",
-  "Vera Charneika",
-  "Jackson Varjão",
-  "Joana Esteves",
-  "Nadja Pirzadeh",
-  "Luís Lima",
-  "Melissa De Leon",
-  "Miguel Fernandes",
-  "Miguel Sousa",
-  "Tiago Bilreiro",
-  "Ricardo Arruda",
-  "Rodolfo Pereira",
-  "Sofia Sousa",
-  "Sukhdeep Sodhi",
-  "Joana Maia",
-  "Albertina Soares",
-  "Joana Martins",
-  "Patrick Schwerhoff",
-].join("\n");
+  [
+    "André Martins",
+    "Marco Sarroeira",
+    "Ana Machado",
+    "Carlos Fernandes",
+    "Gilberto Pe-Curto",
+    "Luís Lima",
+    "Ricardo Arruda",
+    "Joana Maia",
+  ].join("\n"),
+  [
+    "Bruno Lourenço",
+    "Nuno Perpétua",
+    "Andreia Pitti",
+    "Diogo Teixeira",
+    "Vera Charneika",
+    "Melissa De Leon",
+    "Rodolfo Pereira",
+    "Albertina Soares",
+  ].join("\n"),
+  [
+    "Bruno Areal",
+    "Stefan Sarroeira",
+    "Andre Santos",
+    "Daniel Brandão",
+    "Jackson Varjão",
+    "Miguel Fernandes",
+    "Sofia Sousa",
+    "Joana Martins",
+  ].join("\n"),
+  [
+    "Filipe Esteves",
+    "Igor Carvalho",
+    "Puja Naghi",
+    "Duarte Dias",
+    "Joana Esteves",
+    "Miguel Sousa",
+    "Sukhdeep Sodhi",
+    "Patrick Schwerhoff",
+  ].join("\n"),
+  [
+    "Ivo Ferreira",
+    "Caio Arruda",
+    "Fábio Oliveira",
+    "João Carradinha",
+    "Nadja Pirzadeh",
+    "Tiago Bilreiro",
+  ].join("\n"),
+].join("\n\n");
 
 const defaultState = {
   sessionId: "VWDS-2026",
@@ -116,7 +126,23 @@ function useInterval(callback, delay) {
 }
 
 function splitIntoProgramGroups(csv) {
-  const names = csv.split(/\n|,/).map((n) => n.trim()).filter(Boolean);
+  const text = (csv || "").trim();
+  if (!text) {
+    return Array.from({ length: PROGRAM_COUNT }, () => []);
+  }
+
+  const blockMatches = text.split(/\n\s*\n+/).map((block) =>
+    block
+      .split(/\n|,/)
+      .map((n) => n.trim())
+      .filter(Boolean)
+  );
+
+  if (blockMatches.length === PROGRAM_COUNT && blockMatches.every((group) => group.length > 0)) {
+    return blockMatches;
+  }
+
+  const names = text.split(/\n|,/).map((n) => n.trim()).filter(Boolean);
   const groups = Array.from({ length: PROGRAM_COUNT }, () => []);
   names.forEach((name, idx) => {
     groups[idx % PROGRAM_COUNT].push(name);
@@ -383,7 +409,7 @@ export default function App() {
               </div>
               <div className="groups-editor">
                 <label htmlFor="group-roster" className="panel-caption">
-                  Update manager roster (one name per line or comma separated). Saved instantly for all viewers.
+                  Update manager roster (one name per line, blank line between groups). Saved instantly for all viewers.
                 </label>
                 <textarea
                   id="group-roster"
