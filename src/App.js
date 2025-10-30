@@ -285,6 +285,7 @@ export default function App() {
 
   const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase] || DEFAULT_PHASES[0];
   const phaseLabel = phase.name || `Phase ${state.currentPhase + 1}`;
+  const simplePhaseLabel = `Phase ${state.currentPhase + 1}`;
   const phaseOwner = phase.owner || PROGRAMS.find((p) => p.id === phase.id)?.owner || "";
   const headerSubtitle = isHost
     ? "Coordinate the summit rotation and manage the countdown."
@@ -465,7 +466,7 @@ export default function App() {
         ) : (
           <>
             <div className="viewer-meta">
-              <div className="viewer-chip">{phaseLabel}</div>
+              <div className="viewer-chip">{simplePhaseLabel}</div>
               <div className="viewer-chip">{phase.minutes} minute phase</div>
               <div className="viewer-chip">Session {state.sessionId}</div>
               <div className="connection-indicator">
@@ -475,8 +476,7 @@ export default function App() {
             </div>
             <div className="viewer-layout">
               <div className="panel viewer-timer-panel">
-                <div className="viewer-phase-heading">{phaseLabel}</div>
-                {phaseOwner && <div className="phase-owner">Owner: {phaseOwner}</div>}
+                <div className="viewer-phase-heading">{simplePhaseLabel}</div>
                 <div className="viewer-countdown">{fmt(timeLeftMs)}</div>
                 <div className="viewer-countdown-meta">Everyone rotates when the timer reaches zero.</div>
               </div>
