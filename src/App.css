@@ -419,6 +419,11 @@ body {
   color: #0f172a;
 }
 
+.phase-owner {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.6);
+}
+
 .phase-minute-row {
   display: flex;
   align-items: center;
@@ -514,6 +519,11 @@ body {
   color: rgba(15, 23, 42, 0.55);
 }
 
+.group-owner {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.6);
+}
+
 .group-phase {
   font-size: 14px;
   font-weight: 600;
@@ -539,6 +549,31 @@ body {
 .group-list-empty {
   color: rgba(15, 23, 42, 0.5);
   font-style: italic;
+}
+
+.groups-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groups-textarea {
+  width: 100%;
+  min-height: 140px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  font-family: "Roboto Mono", "SFMono-Regular", Menlo, monospace;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+}
+
+.groups-textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
 }
 
 .app-footer {

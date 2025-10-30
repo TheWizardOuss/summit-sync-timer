@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./App.css";
+import { motion } from "framer-motion";
 
 // Firebase setup
 import { initializeApp } from "firebase/app";
@@ -17,21 +19,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const PROGRAM_OWNERS = {
-  0: "Marcelo Afonso",
-  1: "Sofia Fernandes",
-  2: "Oriol Contijoch",
-  3: "Joao Oliveira",
-  4: "Goncalo Candido",
-};
-
-const BASE_PHASES = [
-  { id: 0, name: "Strategic Relevance & Stakeholder Positioning", minutes: 40 },
-  { id: 1, name: "People & Capability Evolution", minutes: 40 },
-  { id: 2, name: "AI Transformation", minutes: 40 },
-  { id: 3, name: "Portfolio Growth & Business Criticality", minutes: 40 },
-  { id: 4, name: "Operational Efficiency", minutes: 40 },
+const PROGRAMS = [
+  { id: 0, name: "Strategic Relevance & Stakeholder Positioning", owner: "Marcelo Afonso" },
+  { id: 1, name: "People & Capability Evolution", owner: "Sofia Fernandes" },
+  { id: 2, name: "AI Transformation", owner: "Oriol Contijoch" },
+  { id: 3, name: "Portfolio Growth & Business Criticality", owner: "Joao Oliveira" },
+  { id: 4, name: "Operational Efficiency", owner: "Goncalo Candido" },
 ];
+
+const PROGRAM_COUNT = PROGRAMS.length;
+const HOST_PASSWORD = "VWDS26";
+
+const DEFAULT_PHASES = PROGRAMS.map((program, idx) => ({
+  id: program.id ?? idx,
+  name: program.name,
+  minutes: 40,
+  owner: program.owner,
+}));
 
 const DEFAULT_GROUPS_CSV = [
   "André Martins",
@@ -74,25 +78,6 @@ const DEFAULT_GROUPS_CSV = [
   "Patrick Schwerhoff",
 ].join("\n");
 
-function normalizePhases(phases = BASE_PHASES) {
-  const source = phases && phases.length ? phases : BASE_PHASES;
-  return source.map((phase, idx) => {
-    const id = phase.id ?? idx;
-    const basePhase = BASE_PHASES.find((p) => (p.id ?? idx) === id) || BASE_PHASES[idx] || {};
-    const owner = PROGRAM_OWNERS[id] ?? PROGRAM_OWNERS[idx] ?? phase.owner ?? basePhase.owner;
-    const minutes = typeof phase.minutes === "number" ? phase.minutes : basePhase.minutes ?? 40;
-    return {
-      ...phase,
-      id,
-      name: phase.name || basePhase.name || "",
-      minutes,
-      owner,
-    };
-  });
-}
-
-const DEFAULT_PHASES = normalizePhases(BASE_PHASES);
-
 const defaultState = {
   sessionId: "VWDS-2026",
   phases: DEFAULT_PHASES,
@@ -104,11 +89,11 @@ const defaultState = {
   groupsCSV: DEFAULT_GROUPS_CSV,
 };
 
-function msLeftForPhase(state, now = Date.now()) {
+function msLeftForPhase(state, nowMs = Date.now()) {
   const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase] || { minutes: 0 };
   const durationMs = (phase.minutes || 0) * 60 * 1000;
   const elapsed = state.isRunning && state.startEpochMs
-    ? now - state.startEpochMs + (state.pausedElapsedMs || 0)
+    ? nowMs - state.startEpochMs + (state.pausedElapsedMs || 0)
     : (state.pausedElapsedMs || 0);
   return Math.max(0, durationMs - elapsed);
 }
@@ -130,15 +115,35 @@ function useInterval(callback, delay) {
   }, [delay]);
 }
 
-function splitIntoFiveGroups(csv) {
-  const names = csv.split(/\n|,/).map(n => n.trim()).filter(Boolean);
-  const groups = [[], [], [], [], []];
-  names.forEach((n, i) => groups[i % 5].push(n));
+function splitIntoProgramGroups(csv) {
+  const names = csv.split(/\n|,/).map((n) => n.trim()).filter(Boolean);
+  const groups = Array.from({ length: PROGRAM_COUNT }, () => []);
+  names.forEach((name, idx) => {
+    groups[idx % PROGRAM_COUNT].push(name);
+  });
   return groups;
+}
+
+function normalizePhases(phases = DEFAULT_PHASES) {
+  const source = phases && phases.length ? phases : DEFAULT_PHASES;
+  return source.map((phase, idx) => {
+    const id = phase.id ?? idx;
+    const program = PROGRAMS.find((p) => p.id === id) || PROGRAMS[idx];
+    const fallback = DEFAULT_PHASES[idx] || { id, minutes: 40 };
+    const minutes = typeof phase.minutes === "number" ? phase.minutes : fallback.minutes ?? 40;
+    return {
+      ...phase,
+      id,
+      name: phase.name || fallback.name || program?.name || `Phase ${idx + 1}`,
+      minutes,
+      owner: phase.owner || program?.owner || fallback.owner,
+    };
+  });
 }
 
 export default function App() {
   const [role, setRole] = useState("viewer");
+  const [hostUnlocked, setHostUnlocked] = useState(false);
   const [state, setState] = useState(defaultState);
   const [connected, setConnected] = useState(false);
 
@@ -176,8 +181,23 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   useInterval(() => setNow(Date.now()), 200);
   const timeLeftMs = useMemo(() => msLeftForPhase(state, now), [state, now]);
-  const allGroups = useMemo(() => splitIntoFiveGroups(state.groupsCSV || DEFAULT_GROUPS_CSV), [state.groupsCSV]);
+  const allGroups = useMemo(
+    () => splitIntoProgramGroups(state.groupsCSV || DEFAULT_GROUPS_CSV),
+    [state.groupsCSV]
+  );
+  const programAssignments = useMemo(
+    () => PROGRAMS.map((program, programIdx) => {
+      const groupIdx = (programIdx - state.currentPhase + PROGRAM_COUNT) % PROGRAM_COUNT;
+      return {
+        program,
+        groupIdx,
+        names: allGroups[groupIdx] || [],
+      };
+    }),
+    [allGroups, state.currentPhase]
+  );
 
+  const isHost = role === "host";
   const canPrev = state.currentPhase > 0;
   const canNext = state.currentPhase < state.phases.length - 1;
 
@@ -201,124 +221,235 @@ export default function App() {
     if (!canPrev) return;
     await push({ ...state, currentPhase: state.currentPhase - 1, isRunning: false, startEpochMs: null, pausedElapsedMs: 0 });
   };
-  const updatePhaseName = async (idx, name) => {
-    const phases = state.phases.map(p => p.id === idx ? { ...p, name } : p);
-    await push({ ...state, phases });
-  };
   const updatePhaseMinutes = async (idx, minutes) => {
     const m = Math.max(1, Math.min(240, Number(minutes) || 0));
-    const phases = state.phases.map(p => p.id === idx ? { ...p, minutes: m } : p);
+    const phases = state.phases.map((p) => (p.id === idx ? { ...p, minutes: m } : p));
     await push({ ...state, phases });
   };
   const setSession = async (sid) => await push({ ...state, sessionId: sid || "VWDS-2026" });
   const setGroupsCSV = async (text) => await push({ ...state, groupsCSV: text });
 
-  const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase];
+  const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase] || DEFAULT_PHASES[0];
+  const phaseLabel = phase.name || `Phase ${state.currentPhase + 1}`;
+  const phaseOwner = phase.owner || PROGRAMS.find((p) => p.id === phase.id)?.owner || "";
+  const headerSubtitle = isHost
+    ? "Coordinate the summit rotation and manage the countdown."
+    : "Stay aligned with your program rotation and the time remaining.";
   const progressPct = useMemo(() => {
     const durationMs = (phase.minutes || 0) * 60 * 1000;
+    if (durationMs === 0) {
+      return 0;
+    }
     const elapsed = Math.max(0, durationMs - timeLeftMs);
     return Math.min(100, Math.round((elapsed / durationMs) * 100));
   }, [phase, timeLeftMs]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Summit Sync Timer</h1>
-            <p className="text-sm opacity-70">Shared session ID keeps everyone in sync. Host controls the timer and phases.</p>
+    <div className="app-root">
+      <div className="app-container">
+        <div className="app-header">
+          <div className="app-header-text">
+            <h1 className="app-title">Summit Sync Timer</h1>
+            <p className="app-subtitle">{headerSubtitle}</p>
           </div>
-          <div className="flex gap-3 items-center">
-            <select className="border rounded-lg px-3 py-2" value={role} onChange={(e) => setRole(e.target.value)}>
+          <div className="app-header-controls">
+            <select
+              className="control-select"
+              value={role}
+              onChange={(e) => {
+                const nextRole = e.target.value;
+                if (nextRole === "host" && !hostUnlocked) {
+                  const supplied = window.prompt("Enter host passcode to continue:");
+                  if (supplied === null) {
+                    setRole("viewer");
+                  } else if (supplied === HOST_PASSWORD) {
+                    setHostUnlocked(true);
+                    setRole("host");
+                  } else {
+                    window.alert("Incorrect passcode. Remaining in viewer mode.");
+                    setRole("viewer");
+                  }
+                } else {
+                  setRole(nextRole);
+                }
+              }}
+            >
               <option value="viewer">Viewer</option>
               <option value="host">Host</option>
             </select>
-            <input className="border rounded-lg px-3 py-2 w-44" placeholder="Session ID" defaultValue={state.sessionId} onBlur={(e) => setSession(e.target.value)} />
+            <input
+              className="control-input"
+              placeholder="Session ID"
+              defaultValue={state.sessionId}
+              onBlur={(e) => setSession(e.target.value)}
+            />
           </div>
+          {isHost ? (
+            !hostUnlocked && (
+              <div className="role-helper">
+                Host view is protected. Provide the summit passcode when prompted.
+              </div>
+            )
+          ) : (
+            <div className="viewer-helper">
+              This live view updates as soon as the host moves everyone to the next phase.
+            </div>
+          )}
         </div>
-        <div className="text-xs opacity-70">Connected: {connected ? "Yes" : "No"}</div>
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 bg-white rounded-2xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-wider opacity-60">Current Phase</div>
-                <div className="text-xl font-semibold">{phase.name}</div>
-                <div className="text-sm opacity-70">Owner: {phase.owner || PROGRAM_OWNERS[phase?.id ?? state.currentPhase]}</div>
+        {isHost ? (
+          <>
+            <div className="status-bar">
+              <div className="session-pill">
+                <span className="pill-label">Session</span>
+                <span className="pill-value">{state.sessionId}</span>
               </div>
-              <div className="text-right">
-                <div className="text-4xl font-mono tabular-nums">{fmt(timeLeftMs)}</div>
-                <div className="text-xs opacity-60">Duration: {phase.minutes} min</div>
+              <div className="session-pill">
+                <span className="pill-label">Role</span>
+                <span className="pill-value">Host</span>
+              </div>
+              <div className={`session-pill${state.isRunning ? " is-emphasis" : ""}`}>
+                <span className="pill-label">Timer</span>
+                <span className="pill-value">{state.isRunning ? "Running" : "Paused"}</span>
+              </div>
+              <div className="connection-indicator">
+                <span className={`status-dot ${connected ? "is-online" : "is-offline"}`} />
+                {connected ? "Live Sync" : "Offline"}
               </div>
             </div>
-            <div className="mt-4 h-3 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-600" style={{ width: `${progressPct}%` }} />
-            </div>
-            {role === "host" && (
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button className="px-3 py-2 rounded-lg bg-indigo-600 text-white" onClick={start}>Start</button>
-                <button className="px-3 py-2 rounded-lg bg-slate-200" onClick={pause}>Pause</button>
-                <button className="px-3 py-2 rounded-lg bg-slate-200" onClick={reset}>Reset</button>
-                <button className="px-3 py-2 rounded-lg bg-slate-200" disabled={!canPrev} onClick={prevPhase}>Prev Phase</button>
-                <button className="px-3 py-2 rounded-lg bg-slate-200" disabled={!canNext} onClick={nextPhase}>Next Phase</button>
-              </div>
-            )}
-          </div>
-          <div className="bg-white rounded-2xl shadow p-4 space-y-3">
-            <div className="text-sm font-semibold">Phases</div>
-            {state.phases.map((p, idx) => {
-              const owner = p.owner || PROGRAM_OWNERS[p.id ?? idx];
-              return (
-                <div key={p.id} className={`p-3 rounded-xl border ${p.id === state.currentPhase ? "border-indigo-500" : "border-slate-200"}`}>
-                  {role === "host" ? (
-                    <input className="w-full text-sm font-medium mb-1 border-b outline-none" value={p.name} onChange={(e) => updatePhaseName(p.id, e.target.value)} />
-                  ) : (
-                    <div className="text-sm font-medium">{p.name}</div>
-                  )}
-                  <div className="text-xs opacity-60 mb-2">Owner: {owner}</div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="opacity-60">Minutes:</span>
-                    {role === "host" ? (
-                      <input type="number" className="w-20 border rounded px-2 py-1" value={p.minutes} min={1} max={240} onChange={(e) => updatePhaseMinutes(p.id, e.target.value)} />
-                    ) : (
-                      <span>{p.minutes}</span>
-                    )}
+            <div className="layout-grid">
+              <div className="panel timer-panel">
+                <div className="timer-header">
+                  <div>
+                    <div className="eyebrow">Current Phase</div>
+                    <div className="timer-phase-name">{phaseLabel}</div>
+                    {phaseOwner && <div className="phase-owner">Owner: {phaseOwner}</div>}
+                  </div>
+                  <div className="timer-countdown">
+                    <div className="timer-countdown-value">{fmt(timeLeftMs)}</div>
+                    <div className="timer-countdown-meta">Duration: {phase.minutes} min</div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold">Groups (auto-split into 5)</div>
-              <p className="text-xs opacity-70">Paste names (one per line or comma-separated). They’ll be distributed across the 5 program groups.</p>
-            </div>
-            <div className="text-xs opacity-70">Approx. 50 managers ⇒ ~10 per group</div>
-          </div>
-          {role === "host" && (
-            <textarea className="mt-3 w-full h-28 border rounded-lg p-3 font-mono text-sm" placeholder="Paste manager names here..." value={state.groupsCSV} onChange={(e) => setGroupsCSV(e.target.value)} />
-          )}
-          <div className="mt-4 grid md:grid-cols-5 gap-4">
-            {allGroups.map((g, idx) => {
-              const program = state.phases[idx] || DEFAULT_PHASES[idx];
-              const owner = program?.owner || PROGRAM_OWNERS[program?.id ?? idx];
-              const label = program?.name || `Program ${idx + 1}`;
-              return (
-                <div key={idx} className="p-3 rounded-xl border border-slate-200">
-                  <div className="text-xs uppercase tracking-wider opacity-60">Group {idx + 1}</div>
-                  <div className="text-sm font-medium">{label}</div>
-                  <div className="text-xs opacity-60 mb-2">Owner: {owner}</div>
-                  <ul className="text-sm space-y-1">
-                    {g.map((name, i) => (<li key={i} className="truncate">• {name}</li>))}
-                    {g.length === 0 && <li className="opacity-50">No names yet</li>}
-                  </ul>
+                <div className="progress-track">
+                  <motion.div
+                    className="progress-bar"
+                    initial={false}
+                    animate={{ width: `${progressPct}%` }}
+                    transition={{ duration: 0.35, ease: [0.22, 0.61, 0.36, 1] }}
+                  />
                 </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="text-center text-xs opacity-60 py-4">© 2025 Summit Sync Timer</div>
+                <div className="timer-controls">
+                  <button className="btn btn-primary" onClick={start}>Start</button>
+                  <button className="btn" onClick={pause}>Pause</button>
+                  <button className="btn" onClick={reset}>Reset</button>
+                  <button className="btn" disabled={!canPrev} onClick={prevPhase}>Prev Phase</button>
+                  <button className="btn" disabled={!canNext} onClick={nextPhase}>Next Phase</button>
+                </div>
+              </div>
+              <div className="panel phases-panel">
+                <div className="panel-title">Phases</div>
+                {state.phases.map((p, idx) => {
+                  const owner = p.owner || PROGRAMS[p.id ?? idx]?.owner;
+                  return (
+                    <div key={p.id} className={`phase-card${p.id === state.currentPhase ? " is-active" : ""}`}>
+                      <div className="phase-name">{p.name}</div>
+                      {owner && <div className="phase-owner">Owner: {owner}</div>}
+                      <div className="phase-minute-row">
+                        <span className="label-muted">Minutes:</span>
+                        <input
+                          type="number"
+                          className="phase-minute-input"
+                          value={p.minutes}
+                          min={1}
+                          max={240}
+                          onChange={(e) => updatePhaseMinutes(p.id, e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="panel groups-panel">
+              <div className="groups-header">
+                <div>
+                  <div className="panel-title">Program Rotations</div>
+                  <p className="panel-help-text">
+                    Participants rotate to the next program each phase. Owners remain assigned to their programs.
+                  </p>
+                </div>
+                <div className="panel-caption">
+                  Connected: {connected ? "Live sync enabled" : "Offline"}
+                </div>
+              </div>
+              <div className="groups-editor">
+                <label htmlFor="group-roster" className="panel-caption">
+                  Update manager roster (one name per line or comma separated). Saved instantly for all viewers.
+                </label>
+                <textarea
+                  id="group-roster"
+                  className="groups-textarea"
+                  value={state.groupsCSV}
+                  onChange={(e) => setGroupsCSV(e.target.value)}
+                />
+              </div>
+              <div className="groups-grid">
+                {programAssignments.map((assignment, idx) => (
+                  <div key={idx} className="group-card">
+                    <div className="group-label">{assignment.program.name}</div>
+                    <div className="group-owner">Owner: {assignment.program.owner}</div>
+                    <div className="group-phase">Group {assignment.groupIdx + 1}</div>
+                    <ul className="group-list">
+                      {assignment.names.length > 0
+                        ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
+                        : (<li className="group-list-empty">No names yet</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="viewer-meta">
+              <div className="viewer-chip">{phaseLabel}</div>
+              <div className="viewer-chip">{phase.minutes} minute phase</div>
+              <div className="viewer-chip">Session {state.sessionId}</div>
+              <div className="connection-indicator">
+                <span className={`status-dot ${connected ? "is-online" : "is-offline"}`} />
+                {connected ? "Live sync" : "Offline"}
+              </div>
+            </div>
+            <div className="viewer-layout">
+              <div className="panel viewer-timer-panel">
+                <div className="viewer-phase-heading">{phaseLabel}</div>
+                {phaseOwner && <div className="phase-owner">Owner: {phaseOwner}</div>}
+                <div className="viewer-countdown">{fmt(timeLeftMs)}</div>
+                <div className="viewer-countdown-meta">Everyone rotates when the timer reaches zero.</div>
+              </div>
+              <div className="panel viewer-program-panel">
+                <div className="viewer-program-header">
+                  <h2>Where each group is now</h2>
+                  <p>Find your name under your group to know which program you’re contributing to this phase.</p>
+                </div>
+                <div className="groups-grid viewer-programs-grid">
+                  {programAssignments.map((assignment, idx) => (
+                    <div key={idx} className="group-card viewer-program-card">
+                      <div className="group-label">{assignment.program.name}</div>
+                      <div className="group-owner">Owner: {assignment.program.owner}</div>
+                      <div className="group-phase viewer-group-tag">Group {assignment.groupIdx + 1}</div>
+                      <ul className="group-list">
+                        {assignment.names.length > 0
+                          ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
+                          : (<li className="group-list-empty">No names yet</li>)}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        <div className="app-footer">© 2025 Summit Sync Timer</div>
       </div>
     </div>
   );
