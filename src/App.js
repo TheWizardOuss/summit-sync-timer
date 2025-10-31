@@ -200,6 +200,10 @@ export default function App() {
   const [hostUnlocked, setHostUnlocked] = useState(false);
   const [state, setState] = useState(defaultState);
   const [connected, setConnected] = useState(false);
+  const [draftGroups, setDraftGroups] = useState(() =>
+    splitIntoProgramGroups(defaultState.groupsCSV).map((group) => group.join("\n"))
+  );
+  const [draftDirty, setDraftDirty] = useState(false);
 
   async function push(newState) {
     const normalizedState = {
@@ -231,6 +235,12 @@ export default function App() {
       setConnected(true);
     });
   }, [state.sessionId]);
+
+  useEffect(() => {
+    if (!draftDirty) {
+      setDraftGroups(splitIntoProgramGroups(state.groupsCSV || DEFAULT_GROUPS_CSV).map((group) => group.join("\n")));
+    }
+  }, [state.groupsCSV, draftDirty]);
 
   const [now, setNow] = useState(Date.now());
   useInterval(() => setNow(Date.now()), 200);
@@ -280,8 +290,20 @@ export default function App() {
     const phases = state.phases.map((p) => (p.id === idx ? { ...p, minutes: m } : p));
     await push({ ...state, phases });
   };
+  const updateDraftGroup = (idx, text) => {
+    setDraftGroups((prev) => prev.map((group, gIdx) => (gIdx === idx ? text : group)));
+    setDraftDirty(true);
+  };
+  const resetDraftGroups = () => {
+    setDraftGroups(splitIntoProgramGroups(state.groupsCSV || DEFAULT_GROUPS_CSV).map((group) => group.join("\n")));
+    setDraftDirty(false);
+  };
+  const saveDraftGroups = async () => {
+    const combined = draftGroups.join("\n\n");
+    await push({ ...state, groupsCSV: combined });
+    setDraftDirty(false);
+  };
   const setSession = async (sid) => await push({ ...state, sessionId: sid || "VWDS-2026" });
-  const setGroupsCSV = async (text) => await push({ ...state, groupsCSV: text });
 
   const phase = state.phases[state.currentPhase] || DEFAULT_PHASES[state.currentPhase] || DEFAULT_PHASES[0];
   const phaseLabel = phase.name || `Phase ${state.currentPhase + 1}`;
@@ -437,16 +459,29 @@ export default function App() {
                 </div>
               </div>
               <div className="groups-editor">
-                <label htmlFor="group-roster" className="panel-caption">
-                  Update manager roster (one name per line, blank line between groups). Saved instantly for all viewers.
-                </label>
-                <textarea
-                  id="group-roster"
-                  className="groups-textarea"
-                  value={state.groupsCSV}
-                  onChange={(e) => setGroupsCSV(e.target.value)}
-                />
+                <p className="panel-caption">
+                  Edit names per group (one per line). Click <strong>Save groups</strong> to publish to everyone once you’re ready.
+                </p>
+                <div className="groups-grid">
+                  {draftGroups.map((groupText, idx) => (
+                    <div key={idx} className="group-card group-edit-card">
+                      <div className="group-label">{PROGRAMS[idx].name}</div>
+                      <div className="group-owner">Owner: {PROGRAMS[idx].owner}</div>
+                      <div className="group-phase">Group {idx + 1}</div>
+                      <textarea
+                        className="groups-textarea group-edit-textarea"
+                        value={groupText}
+                        onChange={(e) => updateDraftGroup(idx, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="group-edit-actions">
+                  <button className="btn btn-primary" disabled={!draftDirty} onClick={saveDraftGroups}>Save groups</button>
+                  <button className="btn" disabled={!draftDirty} onClick={resetDraftGroups}>Discard</button>
+                </div>
               </div>
+              <div className="panel-caption">Published rotation</div>
               <div className="groups-grid">
                 {programAssignments.map((assignment, idx) => (
                   <div key={idx} className="group-card">

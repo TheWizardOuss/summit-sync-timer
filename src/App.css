@@ -576,6 +576,26 @@ body {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
 }
 
+.group-edit-card {
+  gap: 12px;
+}
+
+.group-edit-textarea {
+  min-height: 160px;
+  flex: 1;
+}
+
+.group-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.group-edit-actions .btn {
+  min-width: 140px;
+}
+
 .app-footer {
   text-align: center;
   font-size: 12px;
