@@ -20,11 +20,11 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const PROGRAMS = [
-  { id: 0, name: "Strategic Relevance & Stakeholder Positioning", owner: "Marcelo Afonso" },
-  { id: 1, name: "People & Capability Evolution", owner: "Sofia Fernandes" },
-  { id: 2, name: "AI Transformation", owner: "Oriol Contijoch" },
-  { id: 3, name: "Portfolio Growth & Business Criticality", owner: "Joao Oliveira" },
-  { id: 4, name: "Operational Efficiency", owner: "Goncalo Candido" },
+  { id: 0, name: "Strategic relevance", owner: "Joao Oliveira", room: "Bentley" },
+  { id: 1, name: "People & Capability Evolution", owner: "Sofia Fernandes", room: "Lamborghini" },
+  { id: 2, name: "AI Transformation", owner: "Oriol Contijoch", room: "SKODA" },
+  { id: 3, name: "Portfolio Transformation & Stakeholder positioning", owner: "Marcelo Afonso", room: "Volkswagen" },
+  { id: 4, name: "Business Criticality & Product Excellence", owner: "Goncalo Candido", room: "Porsche" },
 ];
 
 const PROGRAM_COUNT = PROGRAMS.length;
@@ -467,6 +467,7 @@ export default function App() {
                     <div key={idx} className="group-card group-edit-card">
                       <div className="group-label">{PROGRAMS[idx].name}</div>
                       <div className="group-owner">Owner: {PROGRAMS[idx].owner}</div>
+                      <div className="group-room">Room: {PROGRAMS[idx].room}</div>
                       <div className="group-phase">Group {idx + 1}</div>
                       <textarea
                         className="groups-textarea group-edit-textarea"
@@ -487,6 +488,7 @@ export default function App() {
                   <div key={idx} className="group-card">
                     <div className="group-label">{assignment.program.name}</div>
                     <div className="group-owner">Owner: {assignment.program.owner}</div>
+                    <div className="group-room">Room: {assignment.program.room}</div>
                     <div className="group-phase">Group {assignment.groupIdx + 1}</div>
                     <ul className="group-list">
                       {assignment.names.length > 0
@@ -521,15 +523,16 @@ export default function App() {
                   <p>Find your name under your group to know which program you’re contributing to this phase.</p>
                 </div>
                 <div className="groups-grid viewer-programs-grid">
-                  {programAssignments.map((assignment, idx) => (
-                    <div key={idx} className="group-card viewer-program-card">
-                      <div className="group-label">{assignment.program.name}</div>
-                      <div className="group-owner">Owner: {assignment.program.owner}</div>
-                      <div className="group-phase viewer-group-tag">Group {assignment.groupIdx + 1}</div>
-                      <ul className="group-list">
-                        {assignment.names.length > 0
-                          ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
-                          : (<li className="group-list-empty">No names yet</li>)}
+                {programAssignments.map((assignment, idx) => (
+                  <div key={idx} className="group-card viewer-program-card">
+                    <div className="group-label">{assignment.program.name}</div>
+                    <div className="group-owner">Owner: {assignment.program.owner}</div>
+                    <div className="group-room">Room: {assignment.program.room}</div>
+                    <div className="group-phase viewer-group-tag">Group {assignment.groupIdx + 1}</div>
+                    <ul className="group-list">
+                      {assignment.names.length > 0
+                        ? assignment.names.map((name, i) => (<li key={i} className="group-list-item">• {name}</li>))
+                        : (<li className="group-list-empty">No names yet</li>)}
                       </ul>
                     </div>
                   ))}
