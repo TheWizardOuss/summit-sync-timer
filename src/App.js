@@ -91,6 +91,12 @@ const DEFAULT_PHASES = PROGRAMS.map((program, idx) => ({
   owner: program.owner,
 }));
 
+const DEFAULT_ROOMS = PROGRAMS.reduce((acc, program, idx) => {
+  const key = program.id ?? idx;
+  acc[key] = program.room || "";
+  return acc;
+}, {});
+
 const defaultState = {
   sessionId: "VWDS-2026",
   phases: DEFAULT_PHASES,
@@ -100,6 +106,7 @@ const defaultState = {
   pausedElapsedMs: 0,
   lastUpdateBy: "",
   groupsCSV: DEFAULT_GROUPS_CSV,
+  rooms: normalizeRooms(DEFAULT_ROOMS),
 };
 
 function msLeftForPhase(state, nowMs = Date.now()) {
@@ -195,6 +202,32 @@ function normalizePhases(phases = DEFAULT_PHASES) {
   });
 }
 
+function normalizeRooms(rooms = DEFAULT_ROOMS) {
+  const normalized = { ...DEFAULT_ROOMS };
+  if (rooms && typeof rooms === "object") {
+    Object.keys(rooms).forEach((key) => {
+      const value = rooms[key];
+      if (typeof value === "string") {
+        normalized[key] = value.trim();
+      }
+    });
+  }
+  return normalized;
+}
+
+function roomsToDraftList(rooms) {
+  const normalized = normalizeRooms(rooms);
+  return PROGRAMS.map((program, idx) => normalized[program.id ?? idx] ?? "");
+}
+
+function draftsToRoomState(drafts = []) {
+  const overrides = {};
+  PROGRAMS.forEach((program, idx) => {
+    overrides[program.id ?? idx] = drafts[idx] ?? "";
+  });
+  return normalizeRooms(overrides);
+}
+
 export default function App() {
   const [role, setRole] = useState("viewer");
   const [hostUnlocked, setHostUnlocked] = useState(false);
@@ -204,12 +237,15 @@ export default function App() {
     splitIntoProgramGroups(defaultState.groupsCSV).map((group) => group.join("\n"))
   );
   const [draftDirty, setDraftDirty] = useState(false);
+  const [roomDrafts, setRoomDrafts] = useState(() => roomsToDraftList(defaultState.rooms));
+  const [roomsDirty, setRoomsDirty] = useState(false);
 
   async function push(newState) {
     const normalizedState = {
       ...newState,
       phases: normalizePhases(newState.phases),
       groupsCSV: toCanonicalRoster(newState.groupsCSV || DEFAULT_GROUPS_CSV),
+      rooms: normalizeRooms(newState.rooms || DEFAULT_ROOMS),
     };
     const nextState = { ...normalizedState, lastUpdateBy: role };
     setState(nextState);
@@ -229,6 +265,7 @@ export default function App() {
           };
           merged.phases = normalizePhases(data.phases || prev.phases);
           merged.groupsCSV = toCanonicalRoster((data.groupsCSV ?? prev.groupsCSV ?? DEFAULT_GROUPS_CSV) || DEFAULT_GROUPS_CSV);
+          merged.rooms = normalizeRooms(data.rooms || prev.rooms || DEFAULT_ROOMS);
           return merged;
         });
       }
@@ -242,9 +279,16 @@ export default function App() {
     }
   }, [state.groupsCSV, draftDirty]);
 
+  useEffect(() => {
+    if (!roomsDirty) {
+      setRoomDrafts(roomsToDraftList(state.rooms));
+    }
+  }, [state.rooms, roomsDirty]);
+
   const [now, setNow] = useState(Date.now());
   useInterval(() => setNow(Date.now()), 200);
   const timeLeftMs = useMemo(() => msLeftForPhase(state, now), [state, now]);
+  const resolvedRooms = useMemo(() => normalizeRooms(state.rooms), [state.rooms]);
   const allGroups = useMemo(
     () => splitIntoProgramGroups(state.groupsCSV || DEFAULT_GROUPS_CSV),
     [state.groupsCSV]
@@ -256,9 +300,10 @@ export default function App() {
         program,
         groupIdx,
         names: allGroups[groupIdx] || [],
+        room: resolvedRooms[program.id ?? programIdx] ?? program.room ?? "",
       };
     }),
-    [allGroups, state.currentPhase]
+    [allGroups, state.currentPhase, resolvedRooms]
   );
 
   const isHost = role === "host";
@@ -302,6 +347,19 @@ export default function App() {
     const combined = draftGroups.join("\n\n");
     await push({ ...state, groupsCSV: combined });
     setDraftDirty(false);
+  };
+  const updateRoomDraft = (idx, value) => {
+    setRoomDrafts((prev) => prev.map((room, rIdx) => (rIdx === idx ? value : room)));
+    setRoomsDirty(true);
+  };
+  const resetRoomDrafts = () => {
+    setRoomDrafts(roomsToDraftList(state.rooms));
+    setRoomsDirty(false);
+  };
+  const saveRoomDrafts = async () => {
+    const nextRooms = draftsToRoomState(roomDrafts);
+    await push({ ...state, rooms: nextRooms });
+    setRoomsDirty(false);
   };
   const setSession = async (sid) => await push({ ...state, sessionId: sid || "VWDS-2026" });
 
@@ -446,6 +504,41 @@ export default function App() {
                 })}
               </div>
             </div>
+            <div className="panel rooms-panel">
+              <div className="groups-header">
+                <div>
+                  <div className="panel-title">Room Setup</div>
+                  <p className="panel-help-text">
+                    Update the room for each program. Click <strong>Save rooms</strong> to publish changes to everyone.
+                  </p>
+                </div>
+                <div className="panel-caption">
+                  {roomsDirty ? "Unsaved changes" : "Published for viewers"}
+                </div>
+              </div>
+              <div className="groups-grid rooms-grid">
+                {PROGRAMS.map((program, idx) => (
+                  <div key={program.id ?? idx} className="group-card room-card">
+                    <div className="group-label">{program.name}</div>
+                    <div className="group-owner">Owner: {program.owner}</div>
+                    <label className="room-input-label">
+                      Room name
+                      <input
+                        type="text"
+                        className="room-input"
+                        value={roomDrafts[idx] || ""}
+                        onChange={(e) => updateRoomDraft(idx, e.target.value)}
+                        placeholder="Enter room name"
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className="group-edit-actions">
+                <button className="btn btn-primary" disabled={!roomsDirty} onClick={saveRoomDrafts}>Save rooms</button>
+                <button className="btn" disabled={!roomsDirty} onClick={resetRoomDrafts}>Discard</button>
+              </div>
+            </div>
             <div className="panel groups-panel">
               <div className="groups-header">
                 <div>
@@ -463,19 +556,23 @@ export default function App() {
                   Edit names per group (one per line). Click <strong>Save groups</strong> to publish to everyone once you’re ready.
                 </p>
                 <div className="groups-grid">
-                  {draftGroups.map((groupText, idx) => (
-                    <div key={idx} className="group-card group-edit-card">
-                      <div className="group-label">{PROGRAMS[idx].name}</div>
-                      <div className="group-owner">Owner: {PROGRAMS[idx].owner}</div>
-                      <div className="group-room">Room: {PROGRAMS[idx].room}</div>
-                      <div className="group-phase">Group {idx + 1}</div>
-                      <textarea
-                        className="groups-textarea group-edit-textarea"
-                        value={groupText}
-                        onChange={(e) => updateDraftGroup(idx, e.target.value)}
-                      />
-                    </div>
-                  ))}
+                  {draftGroups.map((groupText, idx) => {
+                    const program = PROGRAMS[idx];
+                    const roomName = resolvedRooms[program.id ?? idx] || "";
+                    return (
+                      <div key={program.id ?? idx} className="group-card group-edit-card">
+                        <div className="group-label">{program.name}</div>
+                        <div className="group-owner">Owner: {program.owner}</div>
+                        <div className="group-room">Room: {roomName || "Unassigned"}</div>
+                        <div className="group-phase">Group {idx + 1}</div>
+                        <textarea
+                          className="groups-textarea group-edit-textarea"
+                          value={groupText}
+                          onChange={(e) => updateDraftGroup(idx, e.target.value)}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="group-edit-actions">
                   <button className="btn btn-primary" disabled={!draftDirty} onClick={saveDraftGroups}>Save groups</button>
@@ -488,7 +585,7 @@ export default function App() {
                   <div key={idx} className="group-card">
                     <div className="group-label">{assignment.program.name}</div>
                     <div className="group-owner">Owner: {assignment.program.owner}</div>
-                    <div className="group-room">Room: {assignment.program.room}</div>
+                    <div className="group-room">Room: {assignment.room || "Unassigned"}</div>
                     <div className="group-phase">Group {assignment.groupIdx + 1}</div>
                     <ul className="group-list">
                       {assignment.names.length > 0
@@ -527,7 +624,7 @@ export default function App() {
                   <div key={idx} className="group-card viewer-program-card">
                     <div className="group-label">{assignment.program.name}</div>
                     <div className="group-owner">Owner: {assignment.program.owner}</div>
-                    <div className="group-room">Room: {assignment.program.room}</div>
+                    <div className="group-room">Room: {assignment.room || "Unassigned"}</div>
                     <div className="group-phase viewer-group-tag">Group {assignment.groupIdx + 1}</div>
                     <ul className="group-list">
                       {assignment.names.length > 0
