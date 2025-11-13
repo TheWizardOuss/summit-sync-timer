@@ -21,10 +21,10 @@ const db = getDatabase(app);
 
 const PROGRAMS = [
   { id: 0, name: "Strategic relevance", owner: "Joao Oliveira", room: "Bentley" },
-  { id: 1, name: "People & Capability Evolution", owner: "Sofia Fernandes", room: "Lamborghini" },
-  { id: 2, name: "AI Transformation", owner: "Oriol Contijoch", room: "SKODA" },
   { id: 3, name: "Portfolio Transformation & Stakeholder positioning", owner: "Marcelo Afonso", room: "Volkswagen" },
   { id: 4, name: "Business Criticality & Product Excellence", owner: "Goncalo Candido", room: "Porsche" },
+  { id: 1, name: "People & Capability Evolution", owner: "Sofia Fernandes", room: "Lamborghini" },
+  { id: 2, name: "AI Transformation", owner: "Oriol Contijoch", room: "SKODA" },
 ];
 
 const PROGRAM_COUNT = PROGRAMS.length;
